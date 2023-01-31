@@ -64,7 +64,8 @@ class TrainDataset(Dataset):
         if self.data_args.positive_passage_no_shuffle:
             pos_psg = group_positives[0]
         else:
-            pos_psg = group_positives[(_hashed_seed + epoch) % len(group_positives)]
+            pos_psg = group_positives[(
+                _hashed_seed + epoch) % len(group_positives)]
         encoded_passages.append(self.create_one_example(pos_psg))
 
         negative_size = self.data_args.train_n_passages - 1
@@ -86,6 +87,7 @@ class TrainDataset(Dataset):
 
         return encoded_query, encoded_passages
 
+
 class TrainTASBDataset(Dataset):
     # This is now only for msmarco-passage; since the id starts from 0. While using other datasets, this should be revised.
     def __init__(
@@ -106,19 +108,20 @@ class TrainTASBDataset(Dataset):
         self.kd = kd
 
         if self.data_args.corpus_dir is None:
-            raise ValueError('You should input --corpus_dir with files split*.json')
+            raise ValueError(
+                'You should input --corpus_dir with files split*.json')
 
         # if (self.data_args.train_n_passages!=2) and (self.tasb_sampling):
         #     raise ValueError('--train_n_passages should be 2 if you use tasb sampling')
 
         if (self.qidx_cluster is None) and (self.tasb_sampling):
-            raise ValueError('You should input  --query_cluster_dir for tasb sampling')
+            raise ValueError(
+                'You should input  --query_cluster_dir for tasb sampling')
 
         self.data_args = data_args
         self.total_len = len(self.train_data)
         if self.qidx_cluster:
             self.cluster_num = len(self.qidx_cluster)
-        
 
     def create_one_example(self, text_encoding: List[int], is_query=False):
         item = self.tok.encode_plus(
@@ -143,10 +146,11 @@ class TrainTASBDataset(Dataset):
         if self.data_args.positive_passage_no_shuffle:
             pos_psg_id = group_positives[0]
         else:
-            pos_psg_id = group_positives[(_hashed_seed + epoch) % len(group_positives)]
+            pos_psg_id = group_positives[(
+                _hashed_seed + epoch) % len(group_positives)]
             pos_psg = self.corpus[int(pos_psg_id)]['text']
         encoded_passages.append(self.create_one_example(pos_psg))
-        
+
         negative_size = self.data_args.train_n_passages - 1
         if len(group_negatives) < negative_size:
             negs = random.choices(group_negatives, k=negative_size)
@@ -162,11 +166,14 @@ class TrainTASBDataset(Dataset):
             negs = negs[_offset: _offset + negative_size]
 
         for neg_psg_pid in negs:
-            neg_psg = self.corpus[int(neg_psg_pid)]['text']
+            if (neg_psg_pid >= 15555):
+                neg_psg = [1996]
+            else:
+                neg_psg = self.corpus[int(neg_psg_pid)]['text']
             encoded_passages.append(self.create_one_example(neg_psg))
-        
+
         return encoded_query, encoded_passages, None
-    
+
     def output_qp_with_score(self, group, _hashed_seed):
         qry = group['query']
         encoded_query = self.create_one_example(qry, is_query=True)
@@ -175,7 +182,7 @@ class TrainTASBDataset(Dataset):
         scores = []
         qids_bin_pairs = group['bin_pairs']
         bins_pairs = random.choices(qids_bin_pairs, k=1)[0]
-        
+
         pairs = []
         negative_size = self.data_args.train_n_passages - 1
 
@@ -187,7 +194,7 @@ class TrainTASBDataset(Dataset):
         pos_psg_id = group['positive_pids'][pos_psg_idx]
         pos_psg = self.corpus[int(pos_psg_id)]['text']
         encoded_passages.append(self.create_one_example(pos_psg))
-        
+
         for pair in pairs:
             neg_psg_idx = int(pair[1])
             neg_psg_id = group['negative_pids'][neg_psg_idx]
@@ -206,22 +213,20 @@ class TrainTASBDataset(Dataset):
             # make sure the same query cluster gathered in the same batch
             random.seed(self.trainer.state.global_step)
             cluster_list = random.choices(self.qidx_cluster, k=24)
-            
-            #sampling different queries in a batch
-            random.seed(_hashed_seed) 
+
+            # sampling different queries in a batch
+            random.seed(_hashed_seed)
             cluster = random.choices(cluster_list, k=1)[0]
             item = random.choices(cluster['qidx'])[0]
 
             group = self.train_data[item]
         else:
             group = self.train_data[item]
-        
-        if self.kd:            
+
+        if self.kd:
             return self.output_qp_with_score(group, _hashed_seed)
         else:
             return self.output_qp(group, _hashed_seed)
-        
-
 
 
 class EncodeDataset(Dataset):
@@ -237,7 +242,7 @@ class EncodeDataset(Dataset):
 
     def __getitem__(self, item) -> Tuple[str, BatchEncoding]:
         text_id, text = (self.encode_data[item][f] for f in self.input_keys)
-        if len(text)==0:
+        if len(text) == 0:
             text = [0]
         encoded_text = self.tok.encode_plus(
             text,
@@ -248,12 +253,13 @@ class EncodeDataset(Dataset):
         )
         return text_id, encoded_text
 
+
 class EvalDataset(Dataset):
     input_keys = ['qry_text_id', 'qry_text', 'psg_text_id', 'psg_text', 'rel']
 
-    def __init__(self, 
-                 data_args: DataArguments, 
-                 dataset: datasets.Dataset, 
+    def __init__(self,
+                 data_args: DataArguments,
+                 dataset: datasets.Dataset,
                  tokenizer: PreTrainedTokenizer):
         self.encode_data = dataset
         self.tok = tokenizer
@@ -263,7 +269,8 @@ class EvalDataset(Dataset):
         return len(self.encode_data)
 
     def __getitem__(self, item) -> Tuple[str, BatchEncoding]:
-        qry_text_id, qry_text, psg_text_id, psg_text, rel = (self.encode_data[item][f] for f in self.input_keys)
+        qry_text_id, qry_text, psg_text_id, psg_text, rel = (
+            self.encode_data[item][f] for f in self.input_keys)
         encoded_qry_text = self.tok.encode_plus(
             qry_text,
             max_length=self.data_args.q_max_len,
@@ -271,7 +278,7 @@ class EvalDataset(Dataset):
             padding=False,
             return_token_type_ids=False,
         )
-        if len(psg_text)==0:
+        if len(psg_text) == 0:
             psg_text = [0]
         encoded_psg_text = self.tok.encode_plus(
             psg_text,
@@ -296,7 +303,7 @@ class QPCollator(DataCollatorWithPadding):
     def __call__(self, features):
         qq = [f[0] for f in features]
         dd = [f[1] for f in features]
-        
+
         if isinstance(qq[0], list):
             qq = sum(qq, [])
         if isinstance(dd[0], list):
@@ -332,10 +339,12 @@ class EncodeCollator(DataCollatorWithPadding):
         collated_features = super().__call__(text_features)
         return text_ids, collated_features
 
+
 @dataclass
 class EvalCollator(DataCollatorWithPadding):
     max_q_len: int = 32
     max_p_len: int = 128
+
     def __call__(self, features):
         qry_text_ids = [x[0] for x in features]
         qry_text_features = [x[1] for x in features]

@@ -23,8 +23,9 @@ except ModuleNotFoundError:
 class DenseTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super(DenseTrainer, self).__init__(*args, **kwargs)
-        self._dist_loss_scale_factor = dist.get_world_size() if self.args.negatives_x_device else 1
-        
+        self._dist_loss_scale_factor = dist.get_world_size(
+        ) if self.args.negatives_x_device else 1
+
     def _save(self, output_dir: Optional[str] = None):
         output_dir = output_dir if output_dir is not None else self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
@@ -40,6 +41,8 @@ class DenseTrainer(Trainer):
             if isinstance(x, torch.Tensor):
                 prepared.append(x.to(self.args.device))
             else:
+                if not x:
+                    x = {'input_ids': []}
                 prepared.append(super()._prepare_inputs(x))
         return prepared
 
@@ -59,7 +62,7 @@ class DenseTrainer(Trainer):
 
     def compute_loss(self, model, inputs):
         query, passage, teacher_scores = inputs
-        
+
         return model(query=query, passage=passage, teacher_scores=teacher_scores).loss
 
     def training_step(self, *args):
@@ -73,7 +76,8 @@ def split_dense_inputs(model_input: dict, chunk_size: int):
 
     keys = list(arg_val.keys())
     chunked_tensors = [arg_val[k].split(chunk_size, dim=0) for k in keys]
-    chunked_arg_val = [dict(zip(kk, tt)) for kk, tt in zip(repeat(keys), zip(*chunked_tensors))]
+    chunked_arg_val = [dict(zip(kk, tt))
+                       for kk, tt in zip(repeat(keys), zip(*chunked_tensors))]
 
     return [{arg_key: c} for c in chunked_arg_val]
 
